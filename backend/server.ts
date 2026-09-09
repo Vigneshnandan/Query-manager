@@ -366,6 +366,8 @@ app.post("/api/reverse-geocode", async (req: Request, res: Response) => {
   }
 });
 
+export default app;
+
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server is running on http://0.0.0.0:${PORT}`);
 });
