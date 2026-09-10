@@ -212,9 +212,10 @@ export default function CitizenSubmit() {
       console.log("[PIPELINE_STEP_1] Groq analysis response:", JSON.stringify(analysisData, null, 2));
 
       const issues = await Promise.all(
-        analysisData.issues.map((issue: any) => {
-          console.log(`[PIPELINE_STEP_2] Writing issue with department: "${issue.department}" (type: ${typeof issue.department})`);
-          return supabase.from("issues").insert({
+        analysisData.issues.map(async (issue: any) => {
+          const { data: sessionData } = await supabase.auth.getSession();
+          console.log(`[BUG2_ISSUES_INSERT] Inserting issue for department: "${issue.department}", session: ${sessionData?.session ? "VALID" : "NULL"}`);
+          const result = await supabase.from("issues").insert({
             parent_ticket_id: ticketId,
             department: issue.department,
             issue_text: issue.issue_text,
@@ -222,11 +223,16 @@ export default function CitizenSubmit() {
             priority: issue.priority,
             status: "new",
           });
+          if (result.error) {
+            console.error("[BUG2_ISSUES_ERROR] Full error object:", JSON.stringify(result.error, null, 2));
+          }
+          return result;
         })
       );
 
       if (issues.some((result) => result.error)) {
-        throw new Error("Failed to create issues");
+        const failedError = issues.find((result) => result.error)?.error;
+        throw new Error(`Failed to create issues: ${JSON.stringify(failedError)}`);
       }
 
       if (photos.length > 0) {
@@ -247,11 +253,16 @@ export default function CitizenSubmit() {
               .from("complaint-photos")
               .getPublicUrl(fileName);
 
-            await supabase.from("ticket_photos").insert({
+            const { data: sessionData } = await supabase.auth.getSession();
+            console.log(`[BUG2_TICKET_PHOTOS_INSERT] Inserting photo for ticket ${ticketId}, session: ${sessionData?.session ? "VALID" : "NULL"}`);
+            const photoResult = await supabase.from("ticket_photos").insert({
               ticket_id: ticketId,
               photo_url: data.publicUrl,
               uploaded_by: user.id,
             });
+            if (photoResult.error) {
+              console.error("[BUG2_TICKET_PHOTOS_ERROR] Full error object:", JSON.stringify(photoResult.error, null, 2));
+            }
           } catch (photoErr) {
             console.error(`Error processing photo ${photoFile.name}:`, photoErr);
           }

@@ -42,6 +42,8 @@ export interface Issue {
   resolution_note: string | null;
   citizen_confirmed: boolean;
   citizen_confirmed_at: string | null;
+  citizen_rating: number | null;
+  citizen_feedback: string | null;
   created_at: string;
   updated_at: string;
 }

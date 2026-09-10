@@ -8,6 +8,7 @@ import {
   Button,
   LoadingState,
   Badge,
+  Textarea,
 } from "../components/ui";
 import StatusBadge from "../components/ui/StatusBadge";
 import DepartmentBadge from "../components/ui/DepartmentBadge";
@@ -27,6 +28,9 @@ export default function CitizenTrack() {
   const [resolutionPhotosByIssue, setResolutionPhotosByIssue] = useState<
     Record<string, Array<{ id: string; photo_url: string }>>
   >({});
+  const [feedbackPanelIssueId, setFeedbackPanelIssueId] = useState<string | null>(null);
+  const [rating, setRating] = useState<number | null>(null);
+  const [feedback, setFeedback] = useState("");
 
   useEffect(() => {
     const fetchData = async () => {
@@ -99,32 +103,52 @@ export default function CitizenTrack() {
     fetchData();
   }, [ticketId, navigate]);
 
-  const handleConfirmResolved = async (issueId: string) => {
+  const handleOpenFeedbackPanel = (issueId: string) => {
+    setFeedbackPanelIssueId(issueId);
+    setRating(null);
+    setFeedback("");
+  };
+
+  const handleConfirmResolved = async (issueId: string, withFeedback = true) => {
     try {
       setUpdatingIssueId(issueId);
 
+      const updateData: any = {
+        citizen_confirmed: true,
+        citizen_confirmed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      if (withFeedback) {
+        updateData.citizen_rating = rating;
+        updateData.citizen_feedback = feedback.trim() || null;
+      }
+
       const { error: updateError } = await supabase
         .from("issues")
-        .update({
-          citizen_confirmed: true,
-          citizen_confirmed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq("id", issueId);
 
       if (updateError) throw updateError;
 
+      const updatedAt = new Date().toISOString();
       setIssues(
         issues.map((issue) =>
           issue.id === issueId
             ? {
                 ...issue,
                 citizen_confirmed: true,
-                citizen_confirmed_at: new Date().toISOString(),
+                citizen_confirmed_at: updatedAt,
+                citizen_rating: withFeedback ? rating : issue.citizen_rating,
+                citizen_feedback: withFeedback ? (feedback.trim() || null) : issue.citizen_feedback,
               }
             : issue
         )
       );
+
+      setFeedbackPanelIssueId(null);
+      setRating(null);
+      setFeedback("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
@@ -322,37 +346,75 @@ export default function CitizenTrack() {
                       )}
 
                       {!issue.citizen_confirmed ? (
-                        <div className="space-y-3">
-                          <p className="text-sm text-slate-600">
-                            Has this resolved your issue?
-                          </p>
-                          <div className="flex gap-2">
-                            <Button
-                              variant="primary"
-                              onClick={() => handleConfirmResolved(issue.id)}
-                              disabled={updatingIssueId === issue.id}
-                              className="text-sm"
-                            >
-                              {updatingIssueId === issue.id
-                                ? "Confirming..."
-                                : "Confirm resolved"}
-                            </Button>
-                            <Button
-                              variant="secondary"
-                              onClick={() => handleReopen(issue.id)}
-                              disabled={updatingIssueId === issue.id}
-                              className="text-sm"
-                            >
-                              {updatingIssueId === issue.id
-                                ? "Reopening..."
-                                : "Not resolved, reopen"}
-                            </Button>
+                        feedbackPanelIssueId === issue.id ? (
+                          <div className="space-y-3 bg-blue-50 border border-blue-200 rounded-lg p-4">
+                            <p className="text-sm font-medium text-slate-700">How satisfied are you with the resolution?</p>
+                            <div className="flex gap-1">
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <button
+                                  key={star}
+                                  onClick={() => setRating(rating === star ? null : star)}
+                                  className="text-2xl transition-colors"
+                                >
+                                  {rating && rating >= star ? "★" : "☆"}
+                                </button>
+                              ))}
+                            </div>
+                            <Textarea
+                              id="feedback"
+                              value={feedback}
+                              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFeedback(e.target.value)}
+                              placeholder="Anything else you'd like to share? (optional)"
+                              className="h-20 resize-none"
+                            />
+                            <div className="flex gap-2 items-center">
+                              <Button
+                                variant="primary"
+                                onClick={() => handleConfirmResolved(issue.id, true)}
+                                disabled={updatingIssueId === issue.id}
+                                className="text-sm"
+                              >
+                                {updatingIssueId === issue.id ? "Submitting..." : "Submit"}
+                              </Button>
+                              <button
+                                onClick={() => handleConfirmResolved(issue.id, false)}
+                                disabled={updatingIssueId === issue.id}
+                                className="text-sm text-blue-600 hover:underline disabled:text-slate-400"
+                              >
+                                Skip
+                              </button>
+                            </div>
                           </div>
-                        </div>
+                        ) : (
+                          <div className="space-y-3">
+                            <p className="text-sm text-slate-600">
+                              Has this resolved your issue?
+                            </p>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="primary"
+                                onClick={() => handleOpenFeedbackPanel(issue.id)}
+                                disabled={updatingIssueId === issue.id}
+                                className="text-sm"
+                              >
+                                {updatingIssueId === issue.id ? "Confirming..." : "Confirm resolved"}
+                              </Button>
+                              <Button
+                                variant="secondary"
+                                onClick={() => handleReopen(issue.id)}
+                                disabled={updatingIssueId === issue.id}
+                                className="text-sm"
+                              >
+                                {updatingIssueId === issue.id ? "Reopening..." : "Not resolved, reopen"}
+                              </Button>
+                            </div>
+                          </div>
+                        )
                       ) : (
                         <p className="text-sm text-green-700 bg-green-50 rounded-lg px-3 py-2">
                           ✓ Confirmed on{" "}
                           {new Date(issue.citizen_confirmed_at!).toLocaleDateString()}
+                          {issue.citizen_rating && ` — Rated ${issue.citizen_rating}★`}
                         </p>
                       )}
                     </div>

@@ -36,9 +36,14 @@ export default function PhotoCapture({
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment" },
       });
+      console.log("[PhotoCapture] Camera stream started:", stream.getTracks().length, "tracks");
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        videoRef.current.play().catch((err) => {
+          console.error("[PhotoCapture] Video play() failed:", err);
+        });
+        console.log("[PhotoCapture] Video play() called");
       }
       setCameraActive(true);
     } catch (err) {
@@ -86,6 +91,7 @@ export default function PhotoCapture({
 
   const stopCamera = () => {
     if (streamRef.current) {
+      console.log("[PhotoCapture] Stopping camera stream:", streamRef.current.getTracks().length, "tracks");
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
@@ -201,7 +207,8 @@ export default function PhotoCapture({
               ref={videoRef}
               autoPlay
               playsInline
-              className="w-full bg-black rounded-lg"
+              muted
+              className="w-full h-64 bg-black rounded-lg"
             />
             <div className="flex gap-2 justify-center">
               <Button
